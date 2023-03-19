@@ -1,0 +1,113 @@
+import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.openqa.selenium.*;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import org.testng.annotations.Test;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+public class Newtest {
+
+    WebDriver driver;
+
+
+    @org.testng.annotations.BeforeSuite
+    public void initialization() {
+        System.setProperty("webdriver.chrome.silentOutput","true");
+        System.setProperty("webdriver.chrome.driver", "C:\\Users\\Administrator\\Downloads\\chromedriver_win32\\chromedriver.exe");
+        ChromeOptions options = new ChromeOptions();
+        options.setPageLoadStrategy(PageLoadStrategy.EAGER);
+        driver = new ChromeDriver(options);
+        driver.manage().window().maximize();
+        driver.manage().timeouts().pageLoadTimeout(10, TimeUnit.SECONDS);
+        driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+        driver.get("https://testlink.corp.actifio.com/testlink/login.php");
+    }
+
+    @Test(priority = 1)
+    public void login() {
+        driver.findElement(By.id("login")).sendKeys("<username>");
+        driver.findElement(By.name("tl_password")).sendKeys("<password>");
+        driver.findElement(By.className("big_button")).click();
+        System.out.println(driver);
+    }
+
+
+    @Test(priority = 2)
+    public void change_test_project() throws InterruptedException, IOException {
+        System.out.println(driver);
+        driver.switchTo().frame(0);
+        Select s = new Select(driver.findElement(By.xpath("//*[@class=\"menu_bar\"]//following-sibling::select[@name=\"testproject\"]")));
+        s.selectByVisibleText("Actifio");
+        driver.findElement(By.xpath("//*[@title=\"Test Specification\"]")).click();
+        driver.switchTo().defaultContent();
+        Thread.sleep(2000);
+        System.out.println(driver.getTitle());
+        driver.switchTo().frame("mainframe");
+        driver.switchTo().frame("treeframe");
+        driver.findElement(By.xpath("//*[@name=\"expand_tree\"]")).click();
+        JavascriptExecutor js =  (JavascriptExecutor)driver;
+        js.executeScript("window.scrollTo(0, document.body.scrollHeight)");
+        Thread.sleep(600000);
+        WebElement element = driver.findElement(By.xpath("//*[contains(text(), \"P2V (219)\")]/../../../parent::li/ul"));
+        List<WebElement> steps = element.findElements(By.xpath("./child::*"));
+        write_data(steps);
+
+    }
+
+    public void write_data(List<WebElement> steps) throws IOException, InterruptedException {
+        File file = new File(System.getProperty("user.dir") + "\\ExcelFiles\\TestExcelData.xls");
+        FileInputStream fis = new FileInputStream(file);
+
+        HSSFWorkbook wb = new HSSFWorkbook(fis);
+        HSSFSheet sh = wb.getSheet("Sheet2");
+        int Last_row_num = sh.getLastRowNum();
+        System.out.println(Last_row_num);
+
+        String text = " ";
+        int count = 0;
+        for (WebElement b : steps) {
+
+            System.out.println(b.getText());
+            List<String> words = new ArrayList<String>();
+            words.add(b.getText());
+
+            for (String s1 : words) {
+                text += s1 + "\n";
+                String lines[] = text.split("\\r?\\n|\\r");
+                for (String s2 : lines) {
+                    if(!s2.contains("act")) {
+                        System.out.println("Title is "+ s2);
+                        sh.createRow(count).createCell(0).setCellValue(s2);
+                    }
+                    else if(s2.contains("act")) {
+                        System.out.println("test case is "+ s2);
+                        sh.createRow(count).createCell(1).setCellValue(s2);
+                    }
+                    count = count + 1;
+                }
+            }
+        }
+        FileOutputStream fos = new FileOutputStream(file);
+        wb.write(fos);
+        wb.close();
+
+    }
+
+    @org.testng.annotations.AfterSuite
+    public void closebrowser() {
+        driver.close();
+    }
+
+}
