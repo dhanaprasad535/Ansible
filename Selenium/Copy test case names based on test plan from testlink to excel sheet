@@ -1,0 +1,133 @@
+public class TestPlan {
+
+    WebDriver driver;
+    File file;
+    FileInputStream fis;
+    XSSFWorkbook wb;
+    Properties prop;
+    FileInputStream fis1;
+
+    @org.testng.annotations.BeforeSuite
+    public void initialization() {
+        System.setProperty("webdriver.chrome.driver", "F:\\downloads\\chromedriver_win32\\chromedriver.exe");
+        driver = new ChromeDriver();
+        driver.manage().window().maximize();
+        driver.manage().timeouts().pageLoadTimeout(10, TimeUnit.SECONDS);
+        driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+        driver.get("https://testlink.corp.actifio.com/testlink/login.php");
+    }
+
+    @org.testng.annotations.Test(priority = 1)
+    public void login() {
+        driver.findElement(By.id("login")).sendKeys("dhanaprasad");
+        driver.findElement(By.name("tl_password")).sendKeys("Swarnandhra1@");
+        driver.findElement(By.className("big_button")).click();
+        System.out.println(driver);
+    }
+
+    @org.testng.annotations.Test(priority = 2)
+    public void change_test_project() {
+        System.out.println(driver);
+        driver.switchTo().frame(0);
+        Select s = new Select(driver.findElement(By.xpath("//*[@class=\"menu_bar\"]//following-sibling::select[@name=\"testproject\"]")));
+        s.selectByVisibleText("Actifio");
+    }
+
+    @Test(dependsOnMethods = { "change_test_project" })
+    public void Click_Testplan() throws IOException, InterruptedException {
+        driver.switchTo().defaultContent();
+        driver.switchTo().frame(1);
+
+        WebDriverWait wait = new WebDriverWait(driver, 10);
+        wait.until(ExpectedConditions.elementToBeClickable(driver.findElement(By.xpath("//*[@href=\"lib/general/frmWorkArea.php?feature=showMetrics\" and contains(text(),\"Test Reports and Metrics\")]"))));
+        driver.findElement(By.xpath("//*[@href=\"lib/general/frmWorkArea.php?feature=showMetrics\" and contains(text(),\"Test Reports and Metrics\") ]")).click();
+        driver.switchTo().defaultContent();
+        driver.switchTo().frame("mainframe");
+        driver.switchTo().frame("treeframe");
+        Select s = new Select(driver.findElement(By.name("tplan_id")));
+        s.selectByVisibleText("RD 10.0 SP4 Feature/Regression Test Plan");
+        driver.findElement(By.xpath("//*[contains(text(), \"Test Case Assignment Overview\")]")).click();
+        driver.switchTo().defaultContent();
+        driver.switchTo().frame("mainframe");
+        driver.switchTo().frame("workframe");
+        file = new File("F:\\TestExcelData.xlsx");
+        fis = new FileInputStream(file);
+
+        wb = new XSSFWorkbook(fis);
+        XSSFSheet sh = wb.getSheet("Sheet2");
+        int data_column;
+        String type_of_column = " ";
+        // For Test Suite
+        data_column = 0;
+        type_of_column = "TestSuite";
+        List<WebElement> suite = driver.findElements(By.xpath("//*[@id=\"ext-gen20\"]//tr//td[@class=\"x-grid3-col x-grid3-cell x-grid3-td-2 \"]"));
+        System.out.println("Size of total test suite elements is "+ suite.size());
+        edit_excel_sheet(suite, sh, data_column, type_of_column);
+        // For Test Cases
+        List<WebElement> cases = driver.findElements(By.xpath("//*[@id=\"ext-gen20\"]//tr//td[@class=\"x-grid3-col x-grid3-cell x-grid3-td-3 \"]"));
+        System.out.println("Size of total test case elements is "+ suite.size());
+        data_column = 1;
+        type_of_column = "TestCase";
+        edit_excel_sheet(cases, sh, data_column, type_of_column);
+        // For Platform
+        List<WebElement> platform = driver.findElements(By.xpath("//*[@id=\"ext-gen20\"]//tr//td[@class=\"x-grid3-col x-grid3-cell x-grid3-td-4 \"]"));
+        System.out.println("Size of total test case elements is "+ suite.size());
+        data_column = 2;
+        type_of_column = "Platform";
+        edit_excel_sheet(platform, sh, data_column, type_of_column);
+        // For Priority
+        List<WebElement> priority = driver.findElements(By.xpath("//*[@id=\"ext-gen20\"]//tr//td[@class=\"x-grid3-col x-grid3-cell x-grid3-td-5 \"]"));
+        System.out.println("Size of total test case elements is "+ suite.size());
+        data_column = 3;
+        type_of_column = "Priority";
+        edit_excel_sheet(priority, sh, data_column, type_of_column);
+        wb.close();
+
+    }
+
+    public void edit_excel_sheet(List<WebElement> steps_list, XSSFSheet sh, int data_column, String type_of_column) throws IOException {
+        String text = " ";
+        int count = 1;
+        try {
+            for (WebElement b : steps_list) {
+                List<String> words = new ArrayList<String>();
+                words.add(b.getText());
+                for (String s : words) {
+//                    text += s + "\n";
+                    if(type_of_column.equalsIgnoreCase("TestSuite")) {
+                        System.out.println("Test suite is "+ s);
+                        System.out.println("------------------------");
+                        sh.createRow(count).createCell(0).setCellValue(s);
+                    } else if(type_of_column.equalsIgnoreCase("Testcase")) {
+                        System.out.println("Test case is "+ s);
+                        sh.getRow(count).createCell(1).setCellValue(s);
+                    } else if(type_of_column.equalsIgnoreCase("Platform")) {
+                        System.out.println("Platform is "+ s);
+                        sh.getRow(count).createCell(2).setCellValue(s);
+                    } else if(type_of_column.equalsIgnoreCase("Priority")) {
+                        System.out.println("Priority is "+ s);
+                        sh.getRow(count).createCell(3).setCellValue(s);
+                    }
+
+                    count = count + 1;
+                }
+                System.out.println("Total count of test cases is "+ count
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Looks like" + type_of_column + " is/are not available");
+            e.printStackTrace();
+            driver.switchTo().defaultContent();
+            driver.switchTo().frame(0);
+        }
+        FileOutputStream fos = new FileOutputStream(file);
+        wb.write(fos);
+    }
+
+    @org.testng.annotations.AfterSuite
+    public void closebrowser() {
+        driver.close();
+    }
+
+}
+
