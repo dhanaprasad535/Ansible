@@ -1,0 +1,150 @@
+public class Test {
+
+    WebDriver driver;
+
+    @org.testng.annotations.BeforeSuite
+    public void initialization() {
+        System.setProperty("webdriver.chrome.driver", "F:\\downloads\\chromedriver_win32\\chromedriver.exe");
+        driver = new ChromeDriver();
+        driver.manage().window().maximize();
+        driver.manage().timeouts().pageLoadTimeout(10, TimeUnit.SECONDS);
+        driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+        driver.get("https://testlink.corp.actifio.com/testlink/login.php");
+    }
+
+    @org.testng.annotations.Test(priority = 1)
+    public void login() {
+        driver.findElement(By.id("login")).sendKeys("<testlink username>");
+        driver.findElement(By.name("tl_password")).sendKeys("<testlink password>");
+        driver.findElement(By.className("big_button")).click();
+        System.out.println(driver);
+    }
+
+    @org.testng.annotations.Test(priority = 2)
+    public void change_test_project() {
+        System.out.println(driver);
+        driver.switchTo().frame(0);
+        Select s = new Select(driver.findElement(By.xpath("//*[@class=\"menu_bar\"]//following-sibling::select[@name=\"testproject\"]")));
+        s.selectByVisibleText("Actifio");
+    }
+
+    @org.testng.annotations.Test(dependsOnMethods = { "change_test_project" })
+    public void read_data() throws IOException, InterruptedException {
+        File file = new File("F:\\TestExcelData.xlsx");
+        FileInputStream fis = new FileInputStream(file);
+
+        XSSFWorkbook wb = new XSSFWorkbook(fis);
+        XSSFSheet sh = wb.getSheet("Sheet2");
+        int Last_row_num = sh.getLastRowNum();
+        System.out.println(Last_row_num);
+        for (int i=1; i<=Last_row_num; i++) {
+            String test_case_name = null;
+            try {
+                test_case_name  = sh.getRow(i).getCell(1).getStringCellValue();
+            } catch (NullPointerException npe) {
+                System.out.println("The row doesn't contain any data");
+            }
+            assert test_case_name != null;
+            String[] a = test_case_name.split(":");
+            String test_case_id = a[0];
+            System.out.println(test_case_id);
+            driver.findElement(By.name("targetTestCase")).clear();
+            driver.findElement(By.name("targetTestCase")).sendKeys(test_case_id);
+            driver.findElement(By.className("clickable")).click();
+            Thread.sleep(2000);
+            driver.switchTo().defaultContent();
+            driver.switchTo().frame(1);
+            int data_column;
+            String type_of_column = " ";
+            boolean status;
+            // For functional area
+            List<WebElement> functional_list = driver.findElements(By.xpath("//h2"));
+            data_column = 0;
+            type_of_column = "functional";
+            status = edit_excel_sheet(functional_list, sh, i, data_column, type_of_column );
+            if(!status) {
+                continue;
+            }
+            // For steps
+            List<WebElement> steps_list = driver.findElements(By.xpath("//*[starts-with(@id,\"step_row\" )]//td[2]"));
+            data_column = 2;
+            type_of_column = "steps";
+            status = edit_excel_sheet(steps_list, sh, i, data_column, type_of_column );
+            if(!status) {
+                continue;
+            }
+
+            // For expected
+            List<WebElement> expected_list = driver.findElements(By.xpath("//*[starts-with(@id, \"step_row\")]//td[3]"));
+            data_column = 3;
+            type_of_column = "expected_results";
+            status = edit_excel_sheet(expected_list, sh, i, data_column, type_of_column );
+            if(!status) {
+                continue;
+            }
+
+            // for preconditions
+            List<WebElement> preconditions_list = driver.findElements(By.xpath("//*[contains(text(), \"Preconditions\")]//parent::tr/following-sibling::tr[1]/td"));
+            data_column = 4;
+            type_of_column = "preconditions";
+            status = edit_excel_sheet(preconditions_list, sh, i, data_column, type_of_column );
+            if(!status) {
+                continue;
+            }
+
+            // for summary
+            List<WebElement> summary_list = driver.findElements(By.xpath("//*[contains(text(), \"Summary\")]//parent::tr//following-sibling::tr[1]/td"));
+            data_column = 5;
+            type_of_column = "summary";
+            status = edit_excel_sheet(summary_list, sh, i, data_column, type_of_column );
+            if(!status) {
+                continue;
+            }
+
+            FileOutputStream fos = new FileOutputStream(file);
+            wb.write(fos);
+            driver.switchTo().defaultContent();
+            driver.switchTo().frame(0);
+        }
+        wb.close();
+    }
+
+    public boolean edit_excel_sheet(List<WebElement> steps_list, XSSFSheet sh, int i, int data_column, String type_of_column) {
+        String text = " ";
+        String functional_area = " ";
+        try {
+            for(WebElement b:  steps_list) {
+                System.out.println(b.getText());
+                List<String> words = new ArrayList<String>();
+                words.add(b.getText());
+                for (String s : words)
+                {
+                    text += s + "\n";
+                }
+            }
+            System.out.println("------------------------");
+            if(type_of_column.equalsIgnoreCase("functional")){
+                String[] functional_area_testcase_name = text.split("act");
+                functional_area = functional_area_testcase_name[0];
+                System.out.println( type_of_column +" data is : " + functional_area);
+                sh.getRow(i).createCell(data_column).setCellValue(functional_area);
+            } else {
+                System.out.println(type_of_column + " data is : " + text);
+                sh.getRow(i).createCell(data_column).setCellValue(text);
+            }
+            return  true;
+        } catch (Exception e) {
+            System.out.println("Looks like" +  type_of_column + " is/are not available");
+            e.printStackTrace();
+            driver.switchTo().defaultContent();
+            driver.switchTo().frame(0);
+            return false;
+        }
+    }
+
+    @org.testng.annotations.AfterSuite
+    public void closebrowser() {
+        driver.close();
+    }
+
+}
