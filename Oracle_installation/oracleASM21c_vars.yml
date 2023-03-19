@@ -1,0 +1,57 @@
+---
+Griddevice: /dev/sdd
+swapdevicename: /dev/sdc
+asmdevice1: /dev/sde
+asmdevice2: /dev/sdf
+asmdevice3: /dev/sdg
+version: 21c
+GIinstallationfilelocation_ansibleserver: /root/LINUX.X64_213000_grid_home.zip
+GIinstallationfilelocation_oraclehost: /u02/app/21.3.0/grid/LINUX.X64_213000_grid_home.zip
+griduserpassword: 12!pass345
+GRID_HOME: /u02/app/21.3.0/grid
+GRID_INVENTORY_LOCATION: INVENTORY_LOCATION=/u02/app/oraInventory
+oraclegridinstalloption: oracle.install.option=HA_CONFIG
+GRID_BASE: ORACLE_BASE=/u02/app/21.3.0/grid_base
+oracleinstallasmOSDBA: oracle.install.asm.OSDBA=oinstall
+oracleinstallasmOSOPER: oracle.install.asm.OSOPER=oinstall
+oracleinstallasmOSASM: oracle.install.asm.OSASM=oinstall
+oracleinstallcrsconfigCC: oracle.install.crs.config.ClusterConfiguration=STANDALONE
+oracleinstallcrsconfigEC: oracle.install.crs.config.configureAsExtendedCluster=false
+oracleinstallasmSYSASMPassword: oracle.install.asm.SYSASMPassword=sysman00
+oracleinstallasmdiskGroupname: oracle.install.asm.diskGroup.name=DATA
+oracleinstallasmdiskGroupredundancy: oracle.install.asm.diskGroup.redundancy=EXTERNAL
+oracleinstallasmdiskGroupAUSize: oracle.install.asm.diskGroup.AUSize=4
+oracleinstallasmdiskGroupdisks: oracle.install.asm.diskGroup.disks=/dev/oracleasm/disks/DATA
+oracleinstallasmmonitorPassword: oracle.install.asm.monitorPassword=sysman00
+oracleinstallasmdiskGroupdiskdiskDiscoveryString: oracle.install.asm.diskGroup.diskDiscoveryString=/dev/oracleasm/disks/*
+################################################################
+#             Oracle_DB_parameters
+################################################################
+DBdevice: /dev/sdb
+DBinstallationfilelocation_ansibleserver: /root/LINUX.X64_213000_db_home.zip
+DBinstallationfilelocation_oraclehost: /u01/app/oracle/product/21.3.0/db_1/LINUX.X64_213000_db_home.zip
+oracleuserpassword: 12!pass345
+oracleinstalloption: oracle.install.option=INSTALL_DB_AND_CONFIG
+UNIX_GROUP_NAME: UNIX_GROUP_NAME=oinstall
+ORACLE_HOME: ORACLE_HOME=/u01/app/oracle/product/21.3.0/db_1
+INVENTORY_LOCATION: INVENTORY_LOCATION=/u01/app/oraInventory
+ORACLE_BASE: ORACLE_BASE=/u01/app/oracle
+oracleinstalldbInstallEdition: oracle.install.db.InstallEdition=EE
+oracleinstalldbOSDBA_GROUP: oracle.install.db.OSDBA_GROUP=oinstall
+oracleinstalldbOSOPER_GROUP: oracle.install.db.OSOPER_GROUP=oinstall
+oracleinstalldbOSBACKUPDBA_GROUP: oracle.install.db.OSBACKUPDBA_GROUP=oinstall
+oracleinstalldbOSDGDBA_GROUP: oracle.install.db.OSDGDBA_GROUP=oinstall
+oracleinstalldbOSKMDBA_GROUP: oracle.install.db.OSKMDBA_GROUP=oinstall
+oracleinstalldbOSRACDBA_GROUP: oracle.install.db.OSRACDBA_GROUP=oinstall
+oracleinstalldbconfigstarterdbtype: oracle.install.db.config.starterdb.type=GENERAL_PURPOSE
+oracleinstalldbconfigstarterdbglobalDBName: oracle.install.db.config.starterdb.globalDBName=DB05
+oracleinstalldbconfigstarterdbSID: oracle.install.db.config.starterdb.SID=DB05
+oracleinstalldbConfigureAsContainerDB: oracle.install.db.ConfigureAsContainerDB=true
+oracleinstalldbconfigPDBName: oracle.install.db.config.PDBName=DB05pdb
+oracleinstalldbconfigstarterdbmemoryLimit: oracle.install.db.config.starterdb.memoryLimit=5096
+oracleinstalldbconfigstarterdbstorageType: oracle.install.db.config.starterdb.storageType=ASM_STORAGE
+oracleinstalldbconfigstarterdbpasswordALL: oracle.install.db.config.starterdb.password.ALL=12!pass345
+oracleinstalldbconfigstarterdbfileSystemStoragedataLocation: oracle.install.db.config.starterdb.fileSystemStorage.dataLocation=/u01/app/oracle/product/21.3.0/db_1
+oralceinstalldbconfigasmdiskGroup: oracle.install.db.config.asm.diskGroup=DATA
+databases:
+     - None
