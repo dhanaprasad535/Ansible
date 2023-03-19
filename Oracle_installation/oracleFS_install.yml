@@ -1,0 +1,393 @@
+---
+- name: Installing oracle software and creating a database
+  hosts: all
+  gather_facts: yes
+  vars_files:
+          - oracleFS21c_vars.yml
+
+  tasks:
+    - name: Start
+      set_fact:
+            start_time: "{{ ansible_date_time.iso8601[:19] }}"
+
+    - debug:
+          msg: Start time of the script is {{ start_time }}
+
+
+    - name: Stop and disable firewalld.
+      service:
+          name: firewalld
+          state: stopped
+          enabled: False
+      ignore_errors: yes
+
+    - name: Installing package rsync
+      yum:
+        name:
+           - rsync
+        state: present
+        update_cache: true
+        skip_broken: true
+      ignore_errors: true
+
+    - name: Transfer compat-libstdc from ansible server to Oracle host
+      synchronize:
+           src: /root/compat-libstdc++-33-3.2.3-72.el7.x86_64.rpm
+           dest: /root/compat-libstdc++-33-3.2.3-72.el7.x86_64.rpm
+      delegate_to: localhost
+
+    - name: Installing packages required for Oracle installation
+      yum:
+        name:
+           - compat-libstdc++-33-3.2.3-72.el7.x86_64.rpm
+           - unzip
+           - rsync
+           - bc
+           - binutils
+           - compat-libcap1
+           - elfutils-libelf
+           - elfutils-libelf-devel
+           - fontconfig-devel
+           - glibc
+           - glibc-devel
+           - ksh
+           - libaio
+           - libaio-devel
+           - libXrender
+           - libXrender-devel
+           - libX11
+           - libXau
+           - libXi
+           - libXtst
+           - libgcc
+           - librdmacm-devel
+           - libstdc++
+           - libstdc++-devel
+           - libxcb
+           - make
+           - net-tools # Clusterware
+           - nfs-utils # ACFS
+           - python # ACFS
+           - python-configshell # ACFS
+           - python-rtslib # ACFS
+           - python-six # ACFS
+           - targetcli # ACFS
+           - smartmontools
+           - sysstat
+           - gcc
+           - gcc-c++
+           - libXext
+           - libXext.i686
+           - zlib-devel
+           - zlib-devel.i686
+           - glibc.i686
+           - glibc-devel.i686
+           - libaio.i686
+           - libaio-devel.i686
+           - libX11.i686
+           - libXau.i686
+           - libXi.i686
+           - libXtst.i686
+           - libgcc.i686
+           - libstdc++.i686
+           - libstdc++-devel.i686
+           - libxcb.i686
+        state: present
+        update_cache: true
+        skip_broken: true
+      ignore_errors: true
+
+    - name: configuring parameters in /etc/sysctl.conf file
+      lineinfile:
+             path: /etc/sysctl.conf
+             state: present
+             line: "{{ item }}"
+      with_items:
+             - 'fs.file-max = 6815744'
+             - 'kernel.sem = 250 32000 100 128'
+             - 'kernel.shmmni = 4096'
+             - 'kernel.shmall = 1073741824'
+             - 'kernel.shmmax = 4398046511104'
+             - 'kernel.panic_on_oops = 1'
+             - 'net.core.rmem_default = 262144'
+             - 'net.core.rmem_max = 4194304'
+             - 'net.core.wmem_default = 262144'
+             - 'net.core.wmem_max = 1048576'
+             - 'net.ipv4.conf.all.rp_filter = 2'
+             - 'net.ipv4.conf.default.rp_filter = 2'
+             - 'fs.aio-max-nr = 1048576'
+             - 'net.ipv4.ip_local_port_range = 9000 65500'
+
+    - name: Applying parameters in /etc/sysctl.conf file
+      command: "sysctl -p"
+
+    - name: Setting shared memory file system to 4GB
+      command: "mount -t tmpfs shmfs -o size=4096m /dev/shm"
+    
+    - name: Configuring hard and soft limits
+      lineinfile:
+             path: /etc/security/limits.conf
+             state: present
+             line: "{{ item }}"
+      with_items:
+            - oracle soft nofile  1024
+            - oracle hard nofile  65536
+            - oracle soft nproc  16384
+            - oracle hard nproc  16384
+            - oracle soft stack  10240
+            - oracle hard stack  32768
+            - oracle hard memlock  134217728
+            - oracle soft memlock 134217728
+
+    - name: Creating groups
+      group:
+         name: "{{ item.name }}"
+      with_items:
+           - { name: 'oinstall' }
+           - { name: 'dba' }
+           - { name: 'oper' }
+           - { name: 'backupdba' }
+           - { name: 'asmdba' }
+           - { name: 'asmadmin' }
+           - { name: 'asmoper' }
+           - { name: 'dgdba' }
+           - { name: 'kmdba' }
+
+    - name: Creating oracle user and adding groups to it
+      user: name=oracle group=oinstall groups=dba,oper password="{{ oracleuserpassword  | password_hash('sha512') }}"
+
+    - name: Creating oracle installtion directories
+      command: "mkdir -p /{{ Oracleinstallationfilelocation_oraclehost.split('/')[1] }}"
+
+    - name: Creating directory for swap partition
+      file:
+         path: /swapmnt
+         state: directory
+
+    - name: Creating filesystem
+      filesystem:
+        fstype: ext4
+        dev: "{{ item }}"
+      with_items:
+             - "{{ devicename }}"
+             - "{{ swapdevicename }}"
+
+    - name: Mounting the filesystem
+      mount:
+        path: "{{ item.path1 }}"
+        src: "{{ item.device1 }}"
+        opts: defaults
+        fstype: ext4
+        state: mounted
+      with_items:
+
+           - { path1: "/{{ ORACLE_BASE.split('=')[1].split('/')[1] }}", device1: "{{ devicename }}" }
+           - { path1: '/swapmnt', device1: "{{ swapdevicename }}" }
+
+    - name: create swap file
+      command: dd if=/dev/zero of=/swapmnt/swapfile bs=1G count=8
+      ignore_errors: true
+
+    - name: change permission type
+      file: path=/swapmnt/swapfile mode=600 state=file
+
+    - name: setup swap
+      command: mkswap /swapmnt/swapfile
+      ignore_errors: true
+
+    - name: create swap
+      command: swapon /swapmnt/swapfile
+      ignore_errors: true
+
+    - name: Add to fstab
+      action: lineinfile dest=/etc/fstab regexp="swapfile" line="/swapmnt/swapfile none swap sw 0 0" state=present
+
+    - name: start swap
+      command: swapon -a
+
+    - name: Creating oracle installation directories
+      file:
+          path: "{{ item }}"
+          state: directory
+          owner: oracle
+          group: oinstall
+          mode: 0775
+          recurse: yes
+      with_items:
+               - "{{ Oracleinstallationfilelocation_oraclehost.split('/')[:-1] | join ('/') }}"
+               - "{{ INVENTORYLOCATION.split('=')[1] }}"
+               - "{{ ORACLE_BASE.split('=')[1] }}"
+
+    - name: Transfer oracle installation from ansible server to Oracle host
+      synchronize:
+           src: "{{ Oracleinstallationfilelocation_ansibleserver }}"
+           dest: "{{ Oracleinstallationfilelocation_oraclehost }}"
+      delegate_to: localhost
+
+    - name: Extracting oracle zip file
+      command: "unzip -o -d {{ Oracleinstallationfilelocation_oraclehost.split('/')[:-1] | join ('/') }}  {{ Oracleinstallationfilelocation_oraclehost }}"
+
+    - name: setting fact for response file location when 18c and 19c
+      set_fact:
+          srcloc: "{{ Oracleinstallationfilelocation_oraclehost.split('/')[:-1] | join ('/') }}/install/response/db_install.rsp"
+          destloc: "{{ Oracleinstallationfilelocation_oraclehost.split('/')[:-1] | join ('/') }}/install/response/db_install_new.rsp"
+      when:  version == "21c" or version == "19c" or version == "18c"
+
+    - name: setting fact for response file location when 12c
+      set_fact:
+          srcloc: "{{ Oracleinstallationfilelocation_oraclehost.split('/')[:-1] | join ('/') }}/database/response/db_install.rsp"
+          destloc: "{{ Oracleinstallationfilelocation_oraclehost.split('/')[:-1] | join ('/') }}/database/response/db_install_new.rsp"
+      when:  version == "12c"
+
+    - name: Creating duplicate response file
+      copy:
+         src: "{{ srcloc }}"
+         dest: "{{ destloc }}"
+         remote_src: yes
+
+    - name: Change permissions to 775 for oracle install directories
+      file:
+         path: /{{ Oracleinstallationfilelocation_oraclehost.split("/")[1] }}
+         owner: oracle
+         group: oinstall
+         mode: 0775
+         recurse: yes
+
+    - name: Replacing contents in response file
+      replace:
+          path: "{{ destloc }}"
+          regexp: "{{ item.regexp1 }}"
+          replace: "{{ item.replace }}"
+      with_items:
+           - { regexp1: 'oracle.install.option=', replace: "{{ oracleinstalloption }}" }
+           - { regexp1: 'INVENTORY_LOCATION=', replace: "{{ INVENTORYLOCATION }}" }
+           - { regexp1: 'UNIX_GROUP_NAME=', replace: "{{ UNIX_GROUP_NAME }}" }
+           - { regexp1: 'ORACLE_HOME=', replace: "{{ ORACLE_HOME }}" }
+           - { regexp1: 'ORACLE_BASE=', replace: "{{ ORACLE_BASE }}" }
+           - { regexp1: 'oracle.install.db.InstallEdition=', replace: "{{ oracleinstalldbInstallEdition }}" }
+           - { regexp1: 'oracle.install.db.OSDBA_GROUP=', replace: "{{ oracleinstalldbOSDBA_GROUP }}" }
+           - { regexp1: 'oracle.install.db.OSOPER_GROUP=', replace: "{{ oracleinstalldbOSOPER_GROUP }}" }
+           - { regexp1: 'oracle.install.db.OSBACKUPDBA_GROUP=', replace: "{{ oracleinstalldbOSBACKUPDBA_GROUP }}" }
+           - { regexp1: 'oracle.install.db.OSDGDBA_GROUP=', replace: "{{ oracleinstalldbOSDGDBA_GROUP }}" }
+           - { regexp1: 'oracle.install.db.OSKMDBA_GROUP=', replace: "{{ oracleinstalldbOSKMDBA_GROUP }}" }
+           - { regexp1: 'oracle.install.db.OSRACDBA_GROUP=', replace: "{{ oracleinstalldbOSRACDBA_GROUP }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.type=', replace: "{{ oracleinstalldbconfigstarterdbtype }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.globalDBName=', replace: "{{ oracleinstalldbconfigstarterdbglobalDBName }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.SID=', replace: "{{ oracleinstalldbconfigstarterdbSID }}" }
+           - { regexp1: 'oracle.install.db.ConfigureAsContainerDB=', replace: "{{ oracleinstalldbConfigureAsContainerDB }}" }
+           - { regexp1: 'oracle.install.db.config.PDBName=', replace: "{{ oracleinstalldbconfigPDBName }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.memoryLimit=', replace: "{{ oracleinstalldbconfigstarterdbmemoryLimit }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.storageType=', replace: "{{ oracleinstalldbconfigstarterdbstorageType }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.password.ALL=', replace: "{{ oracleinstalldbconfigstarterdbpasswordALL }}" }
+           - { regexp1: 'oracle.install.db.config.starterdb.fileSystemStorage.dataLocation=', replace: "{{ oracleinstalldbconfigstarterdbfileSystemStoragedataLocation }}" }
+
+    - name: setting runInstaller location when 18c and 19c
+      set_fact:
+          runInsloc: "{{ ORACLE_HOME.split('=')[1] }}/runInstaller"
+      when: version == "21c" or  version == "19c" or version == "18c"
+
+    - name: setting runInstaller location when 12c
+      set_fact:
+          runInsloc: "{{ ORACLE_HOME.split('=')[1] }}/database/runInstaller"
+      when:  version == "12c"
+
+    - name: Install Oracle Client
+      command: "{{ runInsloc }} -silent  -waitForCompletion -responseFile {{ destloc }}"
+      register: client_runinstaller_output
+      become: yes
+      become_method: su
+      become_user: oracle
+      failed_when: client_runinstaller_output.rc != 0
+      when:  version == "21c" or version == "19c" or version == "18c"
+      ignore_errors: yes
+
+    - name: Install Oracle Client
+      command: "{{ runInsloc }} -silent  -waitForCompletion -responseFile {{ destloc }}"
+      register: client_runinstaller_output
+      become: yes
+      become_method: su
+      become_user: oracle
+      failed_when: client_runinstaller_output.rc != 0
+      when:  version == "12c"
+
+    - name: Runnning orainstRoot.sh script
+      command: "{{ INVENTORYLOCATION.split('=')[1] }}/orainstRoot.sh"
+      become: yes
+      become_method: su
+      become_user: root
+
+    - name: Runnning root.sh script
+      command: "{{ ORACLE_HOME.split('=')[1] }}/root.sh"
+      become: yes
+      become_method: su
+      become_user: root
+
+    - name: Executing configTools
+      command: "{{ runInsloc }} -silent  -executeConfigTools -waitForCompletion -responseFile {{ destloc }}"
+      register: configTools_output
+      become: yes
+      become_method: su
+      become_user: oracle
+      failed_when: "('Successfully Configured Software' not in configTools_output.stdout) or (configTools_output.rc !=0)"
+
+    - block:
+       - name: Creating environment variables for oracle
+         copy:
+           dest: "/home/oracle/.bash_profile"
+           content: |
+               export ORACLE_SID={{ oracleinstalldbconfigstarterdbSID.split('=')[1] }}
+               export ORACLE_BASE={{ ORACLE_BASE.split('=')[1] }}
+               export ORACLE_HOME={{ ORACLE_HOME.split('=')[1] }}
+               export PATH=$ORACLE_HOME/bin:$PATH
+
+       - name: Creating sql file to enable archive log
+         copy:
+           dest: "/home/oracle/enablearchive.sql"
+           content: |
+               archive log list;
+               shutdown immediate;
+               startup mount;
+               alter database archivelog;
+               alter database open;
+               select name,log_mode from v$database;
+               archive log list;
+
+       - name: Enabling archive log
+         shell: ". /home/oracle/.bash_profile; sqlplus / as sysdba < /home/oracle/enablearchive.sql"
+         register: command_out
+
+       - debug:
+           msg: "{{ command_out.stdout | regex_replace('[\\r\\n\\t]+','') }}"
+
+       - name: Creating environment variables for oracle
+         debug:
+           msg:
+            - "Oracle software/DB installation is completed successfully"
+            - "Follow the below instructions to connect to the database"
+            - "su oracle"
+            - "Set env variables by running '. /home/oracle/.bash_profile'"
+            - "Run '. oraenv' and provide oracle sid name {{ oracleinstalldbconfigstarterdbSID.split('=')[1] }}"
+            - "Run 'sqlplus / as sysdba'"
+
+       - name: Creating mutliple databases
+         command: '{{ ORACLE_HOME.split("=")[1] }}/bin/dbca -silent -createDatabase  -templateName General_Purpose.dbc  -gdbname {{ item }} -sid {{ item }} -responseFile NO_VALUE  -enableArchive true  -archiveLogDest ""{{ ORACLE_HOME.split("=")[1].rsplit("/", 1)[0] }}/dbs/arch"" -characterSet AL32UTF8  -sysPassword ""{{ oracleinstalldbconfigstarterdbpasswordALL.split("=")[1] }}""  -systemPassword ""{{ oracleinstalldbconfigstarterdbpasswordALL.split("=")[1] }}"" -createAsContainerDatabase false  -databaseType GENERAL_PURPOSE  -memoryMgmtType auto_sga  -totalMemory 1536  -storageType FS  -datafileDestination ""{{ ORACLE_HOME.split("=")[1] }}/{{ item }}/""  -redoLogFileSize 50  -emConfiguration NONE  -ignorePreReqs'
+         register: dbcreate_output
+         become: yes
+         become_method: su
+         become_user: oracle
+         failed_when: dbcreate_output.rc != 0
+         when: item != 'None'
+         with_items: "{{ databases }}"
+
+       - name: force update of current timestamp
+         setup: filter='ansible_date_time'
+
+       - name: Get runtime
+         set_fact:
+           runtime: "{{ ((ansible_date_time.iso8601[:19] | to_datetime('%Y-%m-%dT%H:%M:%S')) - ( start_time  | to_datetime('%Y-%m-%dT%H:%M:%S'))).seconds }}"
+
+       - debug:
+           msg: Run time of the script is {{ runtime }}
+      become: yes
+      become_method: su
+      become_user: oracle
